@@ -61,6 +61,10 @@ class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     @property
     def platform_name(self):
         return self.stop.get("platform_code", "?")
+    
+    @property
+    def custom_name(self):
+        return self.entry.data.get("name", self.entry.title)
 
     @property
     def device_info(self):
@@ -69,6 +73,16 @@ class PIDBaseSensor(CoordinatorEntity, SensorEntity):
             name=self.entry.data.get("name", self.entry.title),
             manufacturer="PID",
         )
+    
+    def _parse_departure_time(self, dep):
+        ts = dep.get("departure_timestamp")
+        if not ts:
+            return None
+
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            return None
 
 
 class PIDLinesSensor(PIDBaseSensor):
@@ -80,7 +94,7 @@ class PIDLinesSensor(PIDBaseSensor):
 
     @property
     def name(self):
-        return f"{self.entry.data.get("name", self.entry.title)} Lines"
+        return f"{self.entry.data.get('name', self.entry.title)} Lines"
 
     @property
     def native_value(self):
@@ -150,7 +164,7 @@ class PIDDepartureSensor(PIDBaseSensor):
 
     @property
     def name(self):
-        return f"{self.entry.title} Departure {self.index + 1}"
+        return f"{self.custom_name} Departure {self.index + 1}"
 
     @property
     def departure(self):
@@ -187,16 +201,6 @@ class PIDDepartureSensor(PIDBaseSensor):
 
 class PIDDepartureInSensor(PIDBaseSensor):
     _attr_icon = "mdi:timer-outline"
-
-    def _parse_departure_time(self, dep):
-        ts = dep.get("departure_timestamp")
-        if not ts:
-            return None
-
-        try:
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except Exception:
-            return None
 
     def __init__(self, coordinator, entry, index: int):
         super().__init__(coordinator, entry)
