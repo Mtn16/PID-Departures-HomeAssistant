@@ -48,22 +48,24 @@ class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     def stop_data(self):
         if not self.coordinator.data:
             return {}
-    
+
         if isinstance(self.coordinator.data, dict):
             return self.coordinator.data
-    
+
         if isinstance(self.coordinator.data, list):
             return self.coordinator.data[0] if self.coordinator.data else {}
-    
+
         return {}
 
     @property
     def stop_name(self):
-        return self.stop_data.get("stop", {}).get("name", "Unknown")
+        stop = self.stop_data.get("stop", {})
+        return stop.get("name", "Unknown")
 
     @property
     def platform_name(self):
-        return self.stop_data.get("stop", {}).get("platform", "?")
+        stop = self.stop_data.get("stop", {})
+        return stop.get("platform_code", "?")
 
     @property
     def device_info(self):
@@ -87,17 +89,18 @@ class PIDLinesSensor(PIDBaseSensor):
 
     @property
     def native_value(self):
+        departures = self.coordinator.data.get("departures", [])
+
         lines = set()
 
-        for dep in self.coordinator.data:
+        for dep in departures:
             route = dep.get("route", {})
             short_name = route.get("short_name")
-
             if short_name:
                 lines.add(short_name)
 
         return ", ".join(sorted(lines))
-
+    
     @property
     def extra_state_attributes(self):
         return {
@@ -122,10 +125,12 @@ class PIDDeparturesSensor(PIDBaseSensor):
 
     @property
     def native_value(self):
-        if not self.coordinator.data:
+        departures = self.coordinator.data.get("departures", [])
+
+        if not departures:
             return "No departures"
 
-        first = self.coordinator.data[0]
+        first = departures[0]
 
         route = first.get("route", {}).get("short_name", "?")
         headsign = first.get("trip", {}).get("headsign", "?")
@@ -134,16 +139,16 @@ class PIDDeparturesSensor(PIDBaseSensor):
 
     @property
     def extra_state_attributes(self):
-        departures = []
-
-        for dep in self.coordinator.data[:5]:
-            departures.append({
-                "line": dep.get("route", {}).get("short_name"),
-                "destination": dep.get("trip", {}).get("headsign"),
-                "departure_timestamp": dep.get("departure_timestamp"),
-                "platform": dep.get("stop", {}).get("platform"),
-            })
-
+        departures = self.coordinator.data.get("departures", [])
+    
         return {
-            "departures": departures
+            "departures": [
+                {
+                    "line": d.get("route", {}).get("short_name"),
+                    "destination": d.get("trip", {}).get("headsign"),
+                    "departure_timestamp": d.get("departure_timestamp"),
+                    "platform": d.get("stop", {}).get("platform"),
+                }
+                for d in departures[:5]
+            ]
         }
