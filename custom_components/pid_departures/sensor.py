@@ -48,8 +48,14 @@ class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     def stop_data(self):
         if not self.coordinator.data:
             return {}
-
-        return self.coordinator.data[0]
+    
+        if isinstance(self.coordinator.data, dict):
+            return self.coordinator.data
+    
+        if isinstance(self.coordinator.data, list):
+            return self.coordinator.data[0] if self.coordinator.data else {}
+    
+        return {}
 
     @property
     def stop_name(self):
