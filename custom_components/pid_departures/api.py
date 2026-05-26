@@ -21,16 +21,14 @@ class PIDDeparturesApi:
             f"&limit=5"
             f"&minutesBefore=0"
             f"&minutesAfter=180"
-            f"&orderBy=departure_time"
         )
-
+    
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=self.headers) as response:
                 response.raise_for_status()
                 data = await response.json()
-
-                # NORMALIZE: vždy dict
+    
                 if isinstance(data, list):
                     return data[0] if data else {}
-
+    
                 return data or {}
