@@ -79,7 +79,7 @@ class PIDLinesSensor(PIDBaseSensor):
 
     @property
     def name(self):
-        return f"{self.stop_name} {self.platform_name} Lines"
+        return f"{self.entry.data.get("name", self.entry.title)} Lines"
 
     @property
     def native_value(self):
