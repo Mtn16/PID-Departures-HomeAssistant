@@ -1,77 +1,68 @@
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers import storage
 
 from .api import PIDDeparturesApi
-from .const import CONF_API_KEY, CONF_STOP_ID, DOMAIN
+from .const import CONF_API_KEY, CONF_STOP_ID, DOMAIN, CONF_PLATFORM
 from .coordinator import PIDCoordinator
-from homeassistant.helpers import storage
 
 STORAGE_KEY = "pid_departures_global"
 STORAGE_VERSION = 1
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    store = storage.Store(
-        hass,
-        STORAGE_VERSION,
-        STORAGE_KEY
-    )
+    store = storage.Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    stored_data = await store.async_load() or {}
 
-    stored_data = await store.async_load()
-
-    api = PIDDeparturesApi(
-        stored_data[CONF_API_KEY]
-    )
+    api = PIDDeparturesApi(stored_data.get(CONF_API_KEY))
 
     coordinator = PIDCoordinator(
         hass,
         api,
-        entry.data[CONF_STOP_ID]
+        entry.data[CONF_STOP_ID],
     )
 
     await coordinator.async_config_entry_first_refresh()
 
-    async_add_entities([
-        PIDLinesSensor(coordinator, entry),
-        PIDDeparturesSensor(coordinator, entry),
-    ])
+    async_add_entities(
+        [
+            PIDLinesSensor(coordinator, entry),
+            PIDDeparturesSensor(coordinator, entry),
+        ]
+    )
 
 
 class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-
         self.entry = entry
 
     @property
-    def stop_data(self):
-        if not self.coordinator.data:
-            return {}
+    def data(self):
+        return self.coordinator.data or {}
 
-        if isinstance(self.coordinator.data, dict):
-            return self.coordinator.data
+    @property
+    def stop(self):
+        return self.data.get("stop", {})
 
-        if isinstance(self.coordinator.data, list):
-            return self.coordinator.data[0] if self.coordinator.data else {}
-
-        return {}
+    @property
+    def departures(self):
+        return self.data.get("departures", [])
 
     @property
     def stop_name(self):
-        stop = self.stop_data.get("stop", {})
-        return stop.get("name", "Unknown")
+        return self.stop.get("name", "Unknown")
 
     @property
     def platform_name(self):
-        stop = self.stop_data.get("stop", {})
-        return stop.get("platform_code", "?")
+        return self.stop.get("platform_code", "?")
 
     @property
     def device_info(self):
         return DeviceInfo(
             identifiers={(DOMAIN, self.entry.entry_id)},
-            name=f"{self.stop_name} {self.platform_name}",
+            name=self.entry.title,
             manufacturer="PID",
         )
 
@@ -89,26 +80,25 @@ class PIDLinesSensor(PIDBaseSensor):
 
     @property
     def native_value(self):
-        departures = self.coordinator.data.get("departures", [])
-
-        lines = set()
-
-        for dep in departures:
-            route = dep.get("route", {})
-            short_name = route.get("short_name")
-            if short_name:
-                lines.add(short_name)
-
+        lines = {
+            d.get("route", {}).get("short_name")
+            for d in self.departures
+            if d.get("route", {}).get("short_name")
+        }
         return ", ".join(sorted(lines))
-    
+
     @property
     def extra_state_attributes(self):
         return {
-            "lines": sorted(list({
-                dep.get("route", {}).get("short_name")
-                for dep in self.coordinator.data
-                if dep.get("route", {}).get("short_name")
-            }))
+            "lines": sorted(
+                list(
+                    {
+                        d.get("route", {}).get("short_name")
+                        for d in self.departures
+                        if d.get("route", {}).get("short_name")
+                    }
+                )
+            )
         }
 
 
@@ -125,12 +115,10 @@ class PIDDeparturesSensor(PIDBaseSensor):
 
     @property
     def native_value(self):
-        departures = self.coordinator.data.get("departures", [])
-
-        if not departures:
+        if not self.departures:
             return "No departures"
 
-        first = departures[0]
+        first = self.departures[0]
 
         route = first.get("route", {}).get("short_name", "?")
         headsign = first.get("trip", {}).get("headsign", "?")
@@ -139,16 +127,14 @@ class PIDDeparturesSensor(PIDBaseSensor):
 
     @property
     def extra_state_attributes(self):
-        departures = self.coordinator.data.get("departures", [])
-    
         return {
             "departures": [
                 {
                     "line": d.get("route", {}).get("short_name"),
                     "destination": d.get("trip", {}).get("headsign"),
                     "departure_timestamp": d.get("departure_timestamp"),
-                    "platform": d.get("stop", {}).get("platform"),
+                    "platform": d.get("stop", {}).get("platform_code"),
                 }
-                for d in departures[:5]
+                for d in self.departures[:5]
             ]
         }

@@ -26,7 +26,8 @@ class PIDCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         try:
+            _LOGGER.debug("Fetching departures for %s", self.stop_id)
             return await self.api.get_stop_departures(self.stop_id)
         except Exception as err:
             _LOGGER.exception("Failed to fetch departures")
-            raise UpdateFailed(f"Failed to fetch departures: {err}") from err
+            raise UpdateFailed(str(err)) from err

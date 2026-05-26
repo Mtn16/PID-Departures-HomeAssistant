@@ -11,7 +11,7 @@ class PIDDeparturesApi:
     def headers(self):
         return {
             "X-Access-Token": self._api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
     async def get_stop_departures(self, stop_id: str):
@@ -20,10 +20,17 @@ class PIDDeparturesApi:
             f"?ids={stop_id}"
             f"&limit=5"
             f"&minutesBefore=0"
-            f"&minutesAfter=120"
+            f"&minutesAfter=180"
+            f"&orderBy=departure_time"
         )
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=self.headers) as response:
                 response.raise_for_status()
-                return await response.json()
+                data = await response.json()
+
+                # NORMALIZE: vždy dict
+                if isinstance(data, list):
+                    return data[0] if data else {}
+
+                return data or {}
