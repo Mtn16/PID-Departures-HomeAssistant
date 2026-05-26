@@ -1,0 +1,8 @@
+{
+  "entity": {
+    "sensor": {
+      "lines": "mdi:bus",
+      "departures": "mdi:clock-outline"
+    }
+  }
+}

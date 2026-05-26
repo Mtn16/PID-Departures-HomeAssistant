@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PID Departures",
+        "description": "Configure PID stop departures",
+        "data": {
+          "stop_id": "Stop ID",
+          "api_key": "Golemio API Key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to API"
+    }
+  }
+}
