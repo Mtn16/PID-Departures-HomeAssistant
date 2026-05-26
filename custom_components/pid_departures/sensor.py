@@ -2,6 +2,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import storage
+from datetime import datetime, timezone
 
 from .api import PIDDeparturesApi
 from .const import CONF_API_KEY, CONF_STOP_ID, DOMAIN, CONF_PLATFORM
@@ -30,9 +31,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ]
 
     for i in range(5):
-        entities.append(
-            PIDDepartureSensor(coordinator, entry, i)
-        )
+        entities.append(PIDDepartureSensor(coordinator, entry, i))
+        entities.append(PIDDepartureTimeSensor(coordinator, entry, i))
+        entities.append(PIDDepartureInSensor(coordinator, entry, i))
 
     async_add_entities(entities)
 
@@ -104,6 +105,38 @@ class PIDLinesSensor(PIDBaseSensor):
             )
         }
     
+class PIDDepartureTimeSensor(PIDBaseSensor):
+    _attr_icon = "mdi:clock"
+
+    def __init__(self, coordinator, entry, index: int):
+        super().__init__(coordinator, entry)
+        self.index = index
+
+    @property
+    def unique_id(self):
+        return f"{self.entry.entry_id}_departure_{self.index + 1}_time"
+
+    @property
+    def name(self):
+        return f"{self.custom_name} Departure {self.index + 1} Time"
+
+    @property
+    def departure(self):
+        departures = self.departures
+        return departures[self.index] if len(departures) > self.index else None
+
+    @property
+    def native_value(self):
+        dep = self.departure
+        if not dep:
+            return None
+
+        dt = self._parse_departure_time(dep)
+        if not dt:
+            return None
+
+        return dt.strftime("%H:%M")
+    
 class PIDDepartureSensor(PIDBaseSensor):
     _attr_icon = "mdi:clock-outline"
 
@@ -149,41 +182,55 @@ class PIDDepartureSensor(PIDBaseSensor):
             "departure_timestamp": dep.get("departure_timestamp"),
             "platform": dep.get("stop", {}).get("platform_code"),
         }
+    
 
 
-""" class PIDDeparturesSensor(PIDBaseSensor):
-    _attr_icon = "mdi:clock-outline"
+class PIDDepartureInSensor(PIDBaseSensor):
+    _attr_icon = "mdi:timer-outline"
+
+    def _parse_departure_time(self, dep):
+        ts = dep.get("departure_timestamp")
+        if not ts:
+            return None
+
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    def __init__(self, coordinator, entry, index: int):
+        super().__init__(coordinator, entry)
+        self.index = index
 
     @property
     def unique_id(self):
-        return f"{self.entry.entry_id}_departures"
+        return f"{self.entry.entry_id}_departure_{self.index + 1}_in"
 
     @property
     def name(self):
-        return f"{self.stop_name} {self.platform_name} Departures"
+        return f"{self.custom_name} Departure {self.index + 1} In"
+
+    @property
+    def departure(self):
+        departures = self.departures
+        return departures[self.index] if len(departures) > self.index else None
 
     @property
     def native_value(self):
-        if not self.departures:
-            return "No departures"
+        dep = self.departure
+        if not dep:
+            return None
 
-        first = self.departures[0]
+        dt = self._parse_departure_time(dep)
+        if not dt:
+            return None
 
-        route = first.get("route", {}).get("short_name", "?")
-        headsign = first.get("trip", {}).get("headsign", "?")
+        now = datetime.now(timezone.utc)
 
-        return f"{route} → {headsign}"
+        diff = dt - now
+        minutes = int(diff.total_seconds() / 60)
 
-    @property
-    def extra_state_attributes(self):
-        return {
-            "departures": [
-                {
-                    "line": d.get("route", {}).get("short_name"),
-                    "destination": d.get("trip", {}).get("headsign"),
-                    "departure_timestamp": d.get("departure_timestamp"),
-                    "platform": d.get("stop", {}).get("platform_code"),
-                }
-                for d in self.departures[:5]
-            ]
-        } """
+        if minutes < 0:
+            return "now"
+
+        return f"{minutes} min"
