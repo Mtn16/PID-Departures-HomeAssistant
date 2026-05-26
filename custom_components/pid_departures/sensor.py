@@ -25,13 +25,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     await coordinator.async_config_entry_first_refresh()
 
-    async_add_entities(
-        [
-            PIDLinesSensor(coordinator, entry),
-            PIDDeparturesSensor(coordinator, entry),
-        ]
-    )
+    entities = [
+        PIDLinesSensor(coordinator, entry),
+    ]
 
+    for i in range(5):
+        entities.append(
+            PIDDepartureSensor(coordinator, entry, i)
+        )
+
+    async_add_entities(entities)
 
 class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
@@ -62,7 +65,7 @@ class PIDBaseSensor(CoordinatorEntity, SensorEntity):
     def device_info(self):
         return DeviceInfo(
             identifiers={(DOMAIN, self.entry.entry_id)},
-            name=self.entry.title,
+            name=self.entry.data.get("name", self.entry.title),
             manufacturer="PID",
         )
 
@@ -100,9 +103,55 @@ class PIDLinesSensor(PIDBaseSensor):
                 )
             )
         }
+    
+class PIDDepartureSensor(PIDBaseSensor):
+    _attr_icon = "mdi:clock-outline"
+
+    def __init__(self, coordinator, entry, index: int):
+        super().__init__(coordinator, entry)
+        self.index = index
+
+    @property
+    def unique_id(self):
+        return f"{self.entry.entry_id}_departure_{self.index + 1}"
+
+    @property
+    def name(self):
+        return f"{self.entry.title} Departure {self.index + 1}"
+
+    @property
+    def departure(self):
+        departures = self.departures
+        if len(departures) > self.index:
+            return departures[self.index]
+        return None
+
+    @property
+    def native_value(self):
+        dep = self.departure
+        if not dep:
+            return "No departure"
+
+        route = dep.get("route", {}).get("short_name", "?")
+        headsign = dep.get("trip", {}).get("headsign", "?")
+
+        return f"{route} → {headsign}"
+
+    @property
+    def extra_state_attributes(self):
+        dep = self.departure
+        if not dep:
+            return {}
+
+        return {
+            "line": dep.get("route", {}).get("short_name"),
+            "destination": dep.get("trip", {}).get("headsign"),
+            "departure_timestamp": dep.get("departure_timestamp"),
+            "platform": dep.get("stop", {}).get("platform_code"),
+        }
 
 
-class PIDDeparturesSensor(PIDBaseSensor):
+""" class PIDDeparturesSensor(PIDBaseSensor):
     _attr_icon = "mdi:clock-outline"
 
     @property
@@ -137,4 +186,4 @@ class PIDDeparturesSensor(PIDBaseSensor):
                 }
                 for d in self.departures[:5]
             ]
-        }
+        } """
